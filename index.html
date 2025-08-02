@@ -1,89 +1,155 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>My Spotify Stats</title>
+  <title>Spotify Stats Comparison</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #121212; color: #fff; }
-    h1, h2 { color: #1DB954; }
-    ul { list-style: none; padding: 0; }
-    li { margin: 4px 0; }
-    .chart { width: 100%; max-width: 600px; margin-top: 20px; }
-    canvas { background: #222; padding: 10px; border-radius: 8px; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #1DB954;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .section {
+      padding: 2rem;
+    }
+    h2 {
+      border-bottom: 2px solid #1DB954;
+      padding-bottom: 0.5rem;
+    }
+    .compare {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .column {
+      flex: 1;
+      min-width: 250px;
+      background: #181818;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    h3 {
+      color: #1DB954;
+      margin-top: 0;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid #333;
+    }
+    .term-selector {
+      text-align: center;
+      padding: 1rem;
+    }
+    .term-selector button {
+      background: #1DB954;
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      margin: 0 0.5rem;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .term-selector button.active {
+      background: #1ed760;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <h1>🎶 My Spotify Stats</h1>
-  <div>
-    <h2>🎵 Top Tracks</h2>
-    <ul id="top-tracks"></ul>
-  </div>
-  <div>
-    <h2>🎤 Top Artists</h2>
-    <ul id="top-artists"></ul>
-  </div>
-  <div>
-    <h2>📈 Daily Plays</h2>
-    <div class="chart">
-      <canvas id="dailyChart"></canvas>
-    </div>
+  <header>Spotify Stats Comparison</header>
+
+  <div class="term-selector">
+    <button data-term="short_term" class="active">Last 4 Weeks</button>
+    <button data-term="medium_term">Last 6 Months</button>
+    <button data-term="long_term">All Time</button>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <div id="stats-container"></div>
+
   <script>
+    const API_URL = 'https://3jg3enwy07.execute-api.us-east-2.amazonaws.com/stats'; // Replace with your API URL
+
     async function loadStats() {
-      try {
-        // 🔹 Replace this URL with your actual S3 public URL for stats.json
-        const res = await fetch('https://3jg3enwy07.execute-api.us-east-2.amazonaws.com/stats');
-        const stats = await res.json();
+      const res = await fetch(API_URL);
+      const stats = await res.json();
+      renderStats(stats);
+    }
 
-        // Top Tracks
-        const topTracksList = document.getElementById('top-tracks');
-        stats.top_tracks.forEach(t => {
-          const li = document.createElement('li');
-          li.textContent = `${t.name} (${t.count} plays)`;
-          topTracksList.appendChild(li);
+    function renderList(items, key='name', countKey='count') {
+      return `<ul>${items.slice(0, 10).map(i =>
+        `<li>${i[key]}${i[countKey] ? ` (${i[countKey]})` : ''}</li>`
+      ).join('')}</ul>`;
+    }
+
+    function renderStats(stats) {
+      const container = document.getElementById('stats-container');
+      container.innerHTML = '';
+
+      ['short_term','medium_term','long_term'].forEach(term => {
+        const myTracks = stats.my_stats[term].tracks;
+        const myArtists = stats.my_stats[term].artists;
+        const spTracks = stats.spotify_stats[term]?.top_tracks || [];
+        const spArtists = stats.spotify_stats[term]?.top_artists || [];
+
+        const section = document.createElement('div');
+        section.className = `section term-section ${term} ${term !== 'short_term' ? 'hidden' : ''}`;
+
+        section.innerHTML = `
+          <h2>${term.replace('_',' ').toUpperCase()}</h2>
+          <div class="compare">
+            <div class="column">
+              <h3>My Top Tracks</h3>
+              ${renderList(myTracks)}
+            </div>
+            <div class="column">
+              <h3>Spotify Top Tracks</h3>
+              ${renderList(spTracks)}
+            </div>
+            <div class="column">
+              <h3>My Top Artists</h3>
+              ${renderList(myArtists)}
+            </div>
+            <div class="column">
+              <h3>Spotify Top Artists</h3>
+              ${renderList(spArtists)}
+            </div>
+          </div>
+        `;
+        container.appendChild(section);
+      });
+
+      setupTermSwitcher();
+    }
+
+    function setupTermSwitcher() {
+      const buttons = document.querySelectorAll('.term-selector button');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const term = btn.dataset.term;
+          document.querySelectorAll('.term-section').forEach(sec => {
+            sec.classList.add('hidden');
+          });
+          document.querySelector(`.${term}`).classList.remove('hidden');
         });
-
-        // Top Artists
-        const topArtistsList = document.getElementById('top-artists');
-        stats.top_artists.forEach(a => {
-          const li = document.createElement('li');
-          li.textContent = `${a.name} (${a.count} plays)`;
-          topArtistsList.appendChild(li);
-        });
-
-        // Daily Plays Chart
-        const ctx = document.getElementById('dailyChart').getContext('2d');
-        const labels = Object.keys(stats.daily_counts).sort();
-        const data = labels.map(day => stats.daily_counts[day]);
-
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Daily Plays',
-              data: data,
-              borderColor: '#1DB954',
-              backgroundColor: 'rgba(29, 185, 84, 0.2)',
-              fill: true,
-              tension: 0.3
-            }]
-          },
-          options: {
-            scales: {
-              x: { ticks: { color: '#fff' } },
-              y: { ticks: { color: '#fff' } }
-            },
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            }
-          }
-        });
-      } catch (err) {
-        document.body.innerHTML += `<p style="color:red">Error loading stats: ${err}</p>`;
-      }
+      });
     }
 
     loadStats();
